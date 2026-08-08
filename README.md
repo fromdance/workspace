@@ -296,16 +296,26 @@ f84f98cd2f8a   alpine    "/bin/sh"   About a minute ago   Exited (0) 52 seconds 
 ```
 - `docker container ls`(또는 `docker ps`): 존재하는 컨테이너들의 목록을 표시하는 명령어.
     - 기본값으로 현재 실행중인 컨테이너만 표시하며, `-a` 플래그를 사용할 경우 모든 컨테이너를 표시
-- `docker container create IMAGE`(또는 `docker create`): 지정된 이미지를 기반으로 새로운 컨테이너를 생성하는 명령어.
+- `docker container create <이미지>`(또는 `docker create`): 지정된 이미지를 기반으로 새로운 컨테이너를 생성하는 명령어.
     - 지정된 이미지 위에 '쓰기 가능한 컨테이너 레이어'를 생성하고, 지정된 명령어를 실행할 준비함.
     - 컨테이너를 생성하지만, 실행은 하지 않음.
-- `docker container start CONTAINER`(또는 `docker start`): 멈춰있는 하나 이상의 컨테이너를 시작하는 명령어.
+- `docker container start <컨테이너>`(또는 `docker start`): 멈춰있는 하나 이상의 컨테이너를 시작하는 명령어.
     - `-a` 옵션을 통해 컨테이너의 표준 출력(STDOUT), 표준 에러(STDERR), signal에 붙거나, `-i`옵션을 통해 표준 입력(STDIN)에 붙을 수 있음.
-- `docker container run IMAGE [COMMAND]`(또는 `docker run`): 지정된 이미지를 기반으로, 새 컨테이너를 만들어 명령어를 실행하는 명령어.
+- `docker container run <이미지> [명령어]`(또는 `docker run`): 지정된 이미지를 기반으로, 새 컨테이너를 만들어 명령어를 실행하는 명령어.
     - `create` + `start` + `attach` 와 같음
 - `docker container stop`(또는 `docker stop`): 컨테이너 내부의 메인 프로세스에게 `SIGTERM` 신호와 `SIGKILL` 신호를 보내는 명령어.
     - `SIGTERM`는 프로세스에게 현재 진행중인 작업을 종료할 것을, `SIGKILL`는 프로세스를 강제로 종료할 것을 의미함
-- `docker container rm CONTAINER`(또는 `docker rm`): 하나 이상의 컨테이너를 지우는 명령어
-- `docker container exec CONTAINER`(또는 `docker exec`): 실행중인 컨테이너에 새 명령을 실행하도록 하는 명령어.
-    - 위 명령어를 통해 실행한 명령은 컨테이너의 메인 프로세스(pid 1)가 실행중인 동안만 실행 됨.
+- `docker container rm <컨테이너>`(또는 `docker rm`): 하나 이상의 컨테이너를 지우는 명령어
+- `docker container exec <컨테이너> <명령어>`(또는 `docker exec`): 실행중인 컨테이너에 새 명령을 실행하도록 하는 명령어.
+    - 위 명령어를 통해 실행한 명령은 컨테이너의 `메인 프로세스(pid 1)`가 실행중인 동안만 실행 됨.
+    - `docker start`와 마찬가지로, `-i` 옵션을 통해 표준 입력(STDIN)에 붙거나, `-t` 옵션을 통해 `의사 TTY(pseudo-TTY)`를 할당할 수 있음.
+        - `의사 TTY`: `TTY`는 `Teletypewriter`라는, 
+- `docker cp <> <>`
 ### 운영
+- `docker logs`
+- `docker stats`
+- `docker inspect <컨테이너>`
+- `docker port <컨테이너>`
+- `docker diff <컨테이너>`
+- `docker events`
+- `docker system df`
