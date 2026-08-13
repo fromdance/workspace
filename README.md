@@ -1,10 +1,10 @@
 # workspace
 
-## 프로젝트 개요
+## 프로젝트 개요 (미션 목표 요약)
 
-## 실행환경
+## 실행환경 (OS/쉘/터미널, Docker 버전, Git 버전)
 
-## 수행항목 체크 리스트
+## 수행 항목 체크리스트(터미널/권한/Docker/Dockerfile/포트/볼륨/Git/GitHub)
 
 ## 1. 터미널 조작 로그 기록
 ```bat
@@ -685,3 +685,204 @@ PID   USER     TIME  COMMAND
 - `exec`: `메인 프로세스`와 별개인 프로세스 생성해 명령 실행
     - 별개의 프로세스를 생성하여 명령을 실행하기 때문에, `exec`를 통해 생성한 프로세스를 종료시켜도 `메인 프로세스`는 영향을 받지 않음
 ## 6. 기존 Dockerfile 기반 커스텀 이미지 제작
+### 선택한 기존 베이스
+### 적용한 커스텀 포인트 및 목적
+### 빌드/실행 명령 + 핵심 결과
+## 트러블슈팅 2건 이상(문제 → 원인 가설 → 확인 → 해결/대안)
+### 1. Docker 컨테이너 실행 구조에 대한 오해
+#### 문제
+- `컨테이너 실행 실습` 중 '컨테이너 내부 진입 후 명령 실행' 미션에 대해 테스트 하기 위해, 경량 리눅스 배포판인 Alpine Linux(`alpine` 이미지)를 설치한 뒤, 해당 컨테이너에 진입해 쉘 명령을 수행하려 했음.
+- 그러나, alpine 이미지로 만든 컨테이너가 자꾸 구동하자마자 꺼져서, 진입할 수가 없는 문제가 발생함
+#### 원인 가설
+- Docker 컨테이너는 **메인 프로세스**가 **완료**되거나, **오류가 발생**하거나, **foreground에서 계속 실행될 이유가 없으면** 즉시 **종료**됨
+```json
+// `docker image inspect alpine` 결과
+...
+        "Config": {
+            "Cmd": [
+                "/bin/sh"
+            ],
+            ...
+        }
+```
+- `alpine` 이미지에 설정된 기본 명령은 `"/bin/sh"`임
+- 쉘을 아무 명령어도 주지않고, 실행하는 형태기 때문에 바로 종료되는 것으로 예상됨
+#### 확인
+- 앞서 말했듯, `alpine` 이미지는 기본적으로 `/bin/sh`를 실행함
+- 이는 `Linux`의 기본 `Command Language Interpreter`인 [sh](https://man7.org/linux/man-pages/man1/sh.1p.html)인데, 이는 `표준 입력(STDIN)` 또는 `파일`로부터 명령을 읽고 실행함.
+  - 만약, 처리할 *입력 데이터가 없으면(즉, EOF(end-of-file)을 마주하게 되면)* **즉시 종료**됨.
+```bat
+# alpine 기반으로 생성한 컨테이너 
+cloudsoswift0540@c6r5s3 workspace % docker ps -a           
+CONTAINER ID   IMAGE     COMMAND     CREATED          STATUS                      PORTS     NAMES
+4c9bd748f91f   alpine    "/bin/sh"   42 seconds ago   Exited (0) 41 seconds ago             test
+# 컨테이너 실행과 동시에 ps를 통해 확인하면, 컨테이너는 실행중임
+cloudsoswift0540@c6r5s3 workspace % docker start test && docker ps -a
+test
+CONTAINER ID   IMAGE     COMMAND     CREATED         STATUS                  PORTS     NAMES
+4c9bd748f91f   alpine    "/bin/sh"   5 minutes ago   Up Less than a second             test
+# 하지만, 그 직후 다시 확인해보면 컨테이너는 종료되어 있음
+# 이때, Exit code 0은 `지정된 작업을 완료 후 정상적으로 종료되었음`을 의미
+# (https://stackoverflow.com/questions/44884719/exited-with-code-0-docker)
+cloudsoswift0540@c6r5s3 workspace % docker ps -a
+CONTAINER ID   IMAGE     COMMAND     CREATED         STATUS                     PORTS     NAMES
+4c9bd748f91f   alpine    "/bin/sh"   6 minutes ago   Exited (0) 5 seconds ago             test
+
+```
+- 아무 입력도 주지 않고, `-i` 옵션을 통해 표준입력도 열어주지 않으면 `/bin/sh`는 이를 `EOF`로 간주하고 즉시 종료됨.
+#### 해결/대안
+- 이러한 문제를 해결하기 위해서는, 다음과 같은 방법이 있음
+- 아래 방안들에서는 모두 `ls -a`을 수행하는것으로 목표 통일
+##### 1. 이미지의 기본 명령어 덮어씌우기
+```bat
+cloudsoswift0540@c6r5s3 workspace % docker run alpine ls -a
+.
+..
+.dockerenv
+bin
+dev
+etc
+home
+lib
+media
+mnt
+opt
+proc
+root
+run
+sbin
+srv
+sys
+tmp
+usr
+var
+# 기본 커맨드가 `ls -a`로 덮어씌워져 있는 것을 볼 수 있음
+cloudsoswift0540@c6r5s3 workspace % docker ps -a
+CONTAINER ID   IMAGE     COMMAND     CREATED          STATUS                      PORTS     NAMES
+b8fe9956620c   alpine    "ls -a"     9 seconds ago    Exited (0) 8 seconds ago              distracted_cerf
+```
+- `docker run [IMAGE] [CMD]` 구문을 이용해 기존 이미지의 CMD를 override하여 컨테이너 생성
+- 아예 `docker run alpine ls -a` 처럼 원하는 쉘에서 실행하고자 했던 명령을 넘겨줄 수도 있음
+```bat
+cloudsoswift0540@c6r5s3 workspace % docker run alpine sh -c "ls -a"
+.
+..
+.dockerenv
+bin
+dev
+etc
+home
+lib
+media
+mnt
+opt
+proc
+root
+run
+sbin
+srv
+sys
+tmp
+usr
+var
+# 마찬가지로 기본 커맨드가 `sh -c 'ls -a'`로 덮어씌워져있음
+cloudsoswift0540@c6r5s3 workspace % docker ps -a
+CONTAINER ID   IMAGE     COMMAND           CREATED              STATUS                          PORTS     NAMES
+80305b6209df   alpine    "sh -c 'ls -a'"   5 seconds ago        Exited (0) 4 seconds ago                  reverent_bhabha
+```
+- 또는, 위처럼 쉘(`sh`)을 실행한 뒤, `-c`(문자열로 된 명령어를 해석하여 실행) 옵션을 통해 문자열 형태의 명령어를 넘길수도 있음
+##### 2. `-i` 옵션을 통해 STDIN을 열고 명령어를 넘겨주기
+```
+# 1. docker run 시 바로 pipeline 을 통해 명령어 넘겨주기
+cloudsoswift0540@c6r5s3 workspace % echo "ls -a" | docker run --name stdin_test -i alpine 
+.
+..
+.dockerenv
+bin
+dev
+etc
+home
+lib
+media
+mnt
+opt
+proc
+root
+run
+sbin
+srv
+sys
+tmp
+usr
+var
+# 2. `docker attach` 를 이용해 pipeline으로 명령어 넘겨주기
+cloudsoswift0540@c6r5s3 workspace % docker start stdin_test
+stdin_test
+cloudsoswift0540@c6r5s3 workspace % echo "ls -a" | docker attach stdin_test
+.
+..
+.dockerenv
+bin
+dev
+etc
+home
+lib
+media
+mnt
+opt
+proc
+root
+run
+sbin
+srv
+sys
+tmp
+usr
+var
+```
+- `docker run`의 `-i` 옵션을 통해 표준 입력을 열면 컨테이너는 계속해서 표준 입력으로 들어오는 인풋을 수신함
+  - 표준 입력을 열어둔채 별다른 종료 명령을 내리지 않을 경우 컨테이너는 계속 실행됨
+- 명령어는 `docker run` 실행시 파이프라인으로 넘겨줄 수도 있고, 실행중인 컨테이너에 `docker attach`를 통해 `local stdin`을 붙인 뒤 넘겨줄 수도 있음
+##### 3. shell script 파일을 container volume에 넘겨주고 이를 실행하도록 하기
+```bat
+# 1. 간단한 스크립트 파일 생성
+# `#!/bin/sh`는 `/bin/sh` 쉘을 통해 이 스크립트를 실행함을 의미
+# `<<'EOF' 내용... EOF`는 EOF 사이 내용을 파일에 주입시킴을 의미
+cloudsoswift0540@c6r5s3 workspace % cat > setup.sh <<'EOF'                 
+#!/bin/sh
+echo "=== 파일 목록 ==="
+ls -la /
+EOF
+# 2. 스크립트 파일을 볼륨을 통해 컨테이너에게 전달하여 실행
+# --rm: 컨테이너 실행 후, 종료될 때 컨테이너 정리 및 파일 시스템 제거 (즉, 일회용 컨테이너 생성용 플래그)
+# -v A:B 는 로컬 머신의 A 위치 자료를 컨테이너의 B 위치로 복사
+cloudsoswift0540@c6r5s3 workspace % docker run --rm \
+  -v $(pwd)/setup.sh:/setup.sh \
+  alpine sh /setup.sh
+=== 파일 목록 ===
+total 4
+drwxr-xr-x    1 root     root            28 Aug 13 08:50 .
+drwxr-xr-x    1 root     root            28 Aug 13 08:50 ..
+-rwxr-xr-x    1 root     root             0 Aug 13 08:50 .dockerenv
+drwxr-xr-x    1 root     root           858 Jun 13 16:38 bin
+drwxr-xr-x    5 root     root           320 Aug 13 08:50 dev
+drwxr-xr-x    1 root     root             6 Aug 13 08:50 etc
+drwxr-xr-x    1 root     root             0 Jun 13 16:38 home
+drwxr-xr-x    1 root     root           146 Jun 13 16:38 lib
+drwxr-xr-x    1 root     root            28 Jun 13 16:38 media
+drwxr-xr-x    1 root     root             0 Jun 13 16:38 mnt
+drwxr-xr-x    1 root     root             0 Jun 13 16:38 opt
+dr-xr-xr-x  226 root     root             0 Aug 13 08:50 proc
+drwx------    1 root     root             0 Jun 13 16:38 root
+drwxr-xr-x    1 root     root             8 Jun 13 16:38 run
+drwxr-xr-x    1 root     root           810 Jun 13 16:38 sbin
+-rw-r--r--    1 root     root            48 Aug 13 08:50 setup.sh
+drwxr-xr-x    1 root     root             0 Jun 13 16:38 srv
+dr-xr-xr-x   11 root     root             0 Aug 13 08:50 sys
+drwxrwxrwt    1 root     root             0 Jun 13 16:38 tmp
+drwxr-xr-x    1 root     root            10 Jun 13 16:38 usr
+drwxr-xr-x    1 root     root            86 Jun 13 16:38 var
+```
+- 원하는 명령을 담은 쉘 스크립트 생성 후, 컨테이너의 볼륨으로 옮기고 이를 실행하도록 해 원하는 명령 수행하도록 할 수 있음
+### 2.
+?
