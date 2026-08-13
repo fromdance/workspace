@@ -1,17 +1,15 @@
-
 server {
-    # 서버가 요청을 들을 포트
-    listen 808;
+    listen ${NGINX_PORT};
     server_name localhost;
-
-
-    root /usr/share/nginx/html;
+    
     location / {
+        root /usr/share/nginx/html;
         index index.html;
     }
 
     location /second {
-        index 
+        root /usr/share/nginx/html;
+        index index.html
     }
 
     location ~\.(gif|jpg|png)$ {

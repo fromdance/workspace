@@ -686,7 +686,23 @@ PID   USER     TIME  COMMAND
     - 별개의 프로세스를 생성하여 명령을 실행하기 때문에, `exec`를 통해 생성한 프로세스를 종료시켜도 `메인 프로세스`는 영향을 받지 않음
 ## 6. 기존 Dockerfile 기반 커스텀 이미지 제작
 ### 선택한 기존 베이스
+- [nginx:latest](https://hub.docker.com/_/nginx) (1.31.3)
+- Dockerfile 및 nginx.conf는 자체 작성
 ### 적용한 커스텀 포인트 및 목적
+#### 1. 포트 변경
+```json
+// `docker image inspect nginx` 내용 중 일부
+{
+    ...
+    "ExposedPorts": {
+        "80/tcp": {}
+    }
+    ...
+}
+```
+- `nginx` 이미지의 공개 포트는 `80/tcp`임
+- [EXPOSE 값은 영향이 없음](https://docs.docker.com/reference/dockerfile/#expose)
+#### 2. 
 ### 빌드/실행 명령 + 핵심 결과
 ## 트러블슈팅 2건 이상(문제 → 원인 가설 → 확인 → 해결/대안)
 ### 1. Docker 컨테이너 실행 구조에 대한 오해
