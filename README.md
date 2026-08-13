@@ -704,6 +704,9 @@ PID   USER     TIME  COMMAND
 - [EXPOSE 값은 영향이 없음](https://docs.docker.com/reference/dockerfile/#expose)
 #### 2. 
 ### 빌드/실행 명령 + 핵심 결과
+#### 이미지 빌드
+`docker build -t my-nginx .`  
+`docker run -d -e NGINX_PORT=8080 -p 3000:8080 my-nginx`
 ## 트러블슈팅 2건 이상(문제 → 원인 가설 → 확인 → 해결/대안)
 ### 1. Docker 컨테이너 실행 구조에 대한 오해
 #### 문제
@@ -900,5 +903,67 @@ drwxr-xr-x    1 root     root            10 Jun 13 16:38 usr
 drwxr-xr-x    1 root     root            86 Jun 13 16:38 var
 ```
 - 원하는 명령을 담은 쉘 스크립트 생성 후, 컨테이너의 볼륨으로 옮기고 이를 실행하도록 해 원하는 명령 수행하도록 할 수 있음
-### 2.
-?
+### 2. NGINX의 링크 처리 관련 문제
+#### 문제
+```bat
+docker run -d -e NGINX_PORT=8080 -p 3000:8080 my-nginx
+```
+- nginx 컨테이너의 포트를 `3000:8080`으로 연결한 뒤, 로컬 머신에서 `localhost:3000`으로 연결함.
+  - 위 명령어 중 `NGINX_PORT=8080`는 NGINX가 요청을 수신할 포트(`listen ${NGINX_PORT};`)
+- 이후, `/second`로 이동하는 링크를 클릭함.
+- 이때, `http://localhost:3000/second`로 이동할 것으로 예상했으나, `http://localhost:8080/second`로 이동함.
+  - 즉, 포트가 유지되지 않고 **컨테이너 기준**으로 바뀜
+#### 원인 가설
+- 포트 매핑 자체는 올바르게 되었음
+  - 로컬 머신에서 `localhost:3000`으로 접속했을 때, nginx에서 서빙하는 HTML 파일이 렌더링되는것을 보면 알 수 있음
+- `<a href="링크">`의 링크 값도 정상적으로 되어있음
+  - `href='/second'`로 되어있기 때문에, 브라우저에서 해당 링크에 마우스 올렸을 때, 정상적으로 표시됨
+  - ![alt text](assets/link.png)
+- 이로 미루어 보았을 때, 로컬 머신쪽 문제는 아닌것 같고, 컨테이너 측에서 `/second` 쪽으로 이동시키는 로직에서 문제가 있을 것으로 추정됨.
+  - nginx에서는 오직 listen 중인 포트(즉, 현재 케이스에서는 `8080`)만 알고있기 때문에, 해당 포트로 이동시키는 것으로 추정됨
+#### 확인
+```bat
+cloudsoswift0540@c6r5s3 ~ % curl -I http://localhost:3000/second
+HTTP/1.1 301 Moved Permanently
+Server: nginx/1.31.3
+Date: Thu, 13 Aug 2026 20:02:52 GMT
+Content-Type: text/html
+Content-Length: 169
+Location: http://localhost:8080/second/
+Connection: keep-alive
+```
+- `curl` 명령어를 사용해, `http://localhost:3000/second`으로 요청을 보내면 어떤 응답이 오는지 확인
+  - `curl(Client URL)`: 터미널에서 서버와 데이터 주고받기 위해 사용하는 도구로, `curl [옵션] [URL]`와 같은 형태로 사용함.
+    - 별도 옵션이 없으면, 기본적으로 해당 URL에 `GET` 요청을 보낸 뒤 결과를 출력함.
+    - 위에서는 `-I` 옵션을 사용했는데, 이는 HTTP 헤더만 확인하는 옵션 [참고](https://curl.se/docs/manpage.html)
+- 위 응답을 확인해보면, `301 리다이렉션`([참고](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Redirections))이 발생하고 있음
+  - 그리고 그 목적지는 **포트가 바뀐 링크**(`http://localhost:8080/second/`)를 가리키고 있음
+- 이후, **링크가 `/`로 끝나고 있지 않음을 깨달음**
+  - 일반적으로 마지막에 붙는 슬래시, 즉 `후행 슬래시(trailing slash)`가 있는 경우 `디렉토리`, 없는 경우 `파일`을 나타냄 [참고 - <슬래시를 붙이거나 붙이지 않거나> Google Search Central Blog](https://developers.google.com/search/blog/2010/04/to-slash-or-not-to-slash?hl=ko)
+  - nginx는 `http://localhost:8080/second` 요청을 받은 뒤, `파일 시스템 경로`로 이를 변환함.
+    - 이때, 이것이 `디렉토리`임을 깨닫고, `index`를 찾기위해 끝에 `/`를 붙인 링크로 `301 리다이렉트`를 보냄
+    - 그리고 redirect를 위한 `Location`의 `절대 주소` 생성시, **listen 포트**인 `8080`을 사용하게 됨
+      - 이로 인해, 포트의 불일치가 발생했던 것.
+#### 해결/대안
+##### A) `absolute_redirect off` 옵션을 준다
+```bat
+server {
+    listen ${NGINX_PORT};
+    server_name localhost;
+    absolute_redirect off;      # 상대주소로 리다이렉트
+
+    location /second {
+        alias /usr/share/nginx/html/second;
+        index index.html;
+    }
+}
+```
+- 해당 옵션을 `비활성화`(즉, `off`)하게 되면, `nginx`에서 수행하는 리다이렉션은 `상대 경로`로 처리됨. [참고](https://nginx.org/en/docs/http/ngx_http_core_module.html)
+##### B) 링크 끝에 슬래시를 추가한다
+```html
+<!-- 기존 -->
+<a href="/second">두 번째 페이지로 이동</a>
+<!-- 변경 -->
+<a href="/second/">두 번째 페이지로 이동</a>
+```
+- 링크를 제대로 달아서, 301 리다이렉트 자체를 회피하는 방법

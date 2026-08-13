@@ -1,6 +1,8 @@
 server {
     listen ${NGINX_PORT};
     server_name localhost;
+    absolute_redirect off; 
+    
     
     location / {
         root /usr/share/nginx/html;
@@ -8,8 +10,11 @@ server {
     }
 
     location /second {
-        root /usr/share/nginx/html;
-        index index.html
+        
+        # alias: 뒤에 location 값을 붙이던 root와 달리, URL 경로를 대체하는 형태
+        # 만약 root를 사용했다면, `/usr/share/nginx/html;`로 했어야 했음
+        alias /usr/share/nginx/html/second;
+        index index.html;
     }
 
     location ~\.(gif|jpg|png)$ {
