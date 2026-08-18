@@ -1,5 +1,5 @@
 # workspace
-
+내 컴퓨터에 개발자용 '작업실' 꾸미기
 ## 프로젝트 개요 (미션 목표 요약)
 - 원활한 협업을 위해, '서비스를 개발하고, 테스트하는 환경'을 Docker로, 환경-독립적인 형태로 공유하는 능력을 기르기 위한 프로젝트
 - 소스코드 파일의 공유를 위해 Git/Github의 기능을 학습하고, 가상환경의 공유를 위해 Docker의 기능을 학습한다.
@@ -248,10 +248,10 @@ WARNING: DOCKER_INSECURE_NO_IPTABLES_RAW is set
 
 ```bat
 cloudsoswift0540@c4r1s1 workspace % docker image ls 
-                                                            i Info →   U  In Use
+                                                            
 IMAGE   ID             DISK USAGE   CONTENT SIZE   EXTRA
 cloudsoswift0540@c4r1s1 workspace % docker images   
-                                                            i Info →   U  In Use
+                                                            
 IMAGE   ID             DISK USAGE   CONTENT SIZE   EXTRA
 cloudsoswift0540@c4r1s1 workspace % docker image pull alpine 
 Using default tag: latest
@@ -263,7 +263,7 @@ Digest: sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 Status: Downloaded newer image for alpine:latest
 docker.io/library/alpine:latest
 cloudsoswift0540@c4r1s1 workspace % docker images                  
-                                                            i Info →   U  In Use
+                                                            
 IMAGE           ID             DISK USAGE   CONTENT SIZE   EXTRA
 alpine:latest   28bd5fe8b56d         14MB         3.93MB  
 cloudsoswift0540@c4r1s1 workspace % docker image rm alpine
@@ -1221,14 +1221,80 @@ server {
 - 링크를 제대로 달아서, 301 리다이렉트 자체를 회피하는 방법
 ## 심층
 ### "호스트 포트가 이미 사용중"이라 포트 매핑 실패시, 어떤 순서로 원인 진단?
+1. 도커 내부에서 같은 `호스트 포트`를 사용중인 서비스가 있는지 확인
 ```bat
-cloudsoswift0540@c6r6s4 workspace % lsof -i :3000
-COMMAND     PID             USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
-OrbStack  52769 cloudsoswift0540   86u  IPv4 0x1c86543cd2da4cbe      0t0  TCP *:hbci (LISTEN)
-OrbStack  52769 cloudsoswift0540  105u  IPv6 0x75ddfef94a59aa7c      0t0  TCP *:hbci (LISTEN)
+cloudsoswift0540@c6r6s4 workspace % docker ps --filter "publish=3000"                     
+CONTAINER ID   IMAGE      COMMAND                   CREATED        STATUS        PORTS                                                 NAMES
+ea19cc2f6080   my-nginx   "/docker-entrypoint.…"   1 second ago   Up 1 second   80/tcp, 0.0.0.0:3000->8080/tcp, [::]:3000->8080/tcp   bold_curie
 ```
-1. 현재 해당 포트를 사용중인 프로세스를 식별한 뒤, 중지한다.
--  `lsof -i :{포트번호}` 를 입력하면, 해당 포트를 사용중인 프로세스의 정보가 출력된다.
+- `docker ps --filter "publish={포트번호}"`: 컨테이너 중, `포트번호` 포트를 `publish`한 컨테이너를 출력
+    - `--publish` = `-p`
+2. 호스트 프로세스 중, 해당 포트를 사용중인 프로세스를 확인
+```bat
+cloudsoswift0540@c6r6s4 workspace % lsof -nP -iTCP:3000 -sTCP:LISTEN                      
+COMMAND     PID             USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+OrbStack  57471 cloudsoswift0540   86u  IPv4 0x9e0945462feee0a9      0t0  TCP *:3000 (LISTEN)
+OrbStack  57471 cloudsoswift0540   87u  IPv6 0x75ddfef94a59aa7c      0t0  TCP *:3000 (LISTEN)
+cloudsoswift0540@c6r6s4 workspace % kill -9 57471
+```
+![alt text](/assets/kill_process.png)
+-  `lsof -nP -iTCP:{포트번호} -sTCP:LISTEN` 를 입력하면, 해당 포트를 사용중인 프로세스의 정보가 출력된다.
     - `lsof`: `list open files`의 약자로, 시스템에서 열려있는 모든 파일과 해당 파일들을 열고 있는 프로세스들의 목록을 출력
-- `kill -9 {PID}`: 
+        - `-n`: 네트워크 파일(인터넷 소켓)의 호스트 이름 변환 차단, `-P`: 네트워크 파일의 포트 번호 -> 포트 이름 변환 차단
+        - `-iTCP:{포트번호} -sTCP:LISTEN`: TCP 상태가 `LISTEN`인 네트워크 파일만 나열
+- `kill -9 {PID}`: 프로세스 ID가 `PID`인 프로세스를 종료시킴
+    - `-9`: `-signal_number`로, 시그널 번호 9는 `KILL SIGNAL`을 의미
 ### 컨테이너 삭제 후 데이터 사라지는 것 방지하기 위한 대안?
+![alt text](/assets/container_layer.png)
+- `Docker 컨테이너`는 `스토리지 드라이버`를 사용해 컨테이너의 `쓰기 가능한 레이어(writable layer)`에 데이터를 저장함
+    - 이 `쓰기 가능한 레이어`는 영속하지 않기 때문에, 컨테이너가 삭제되면 데이터가 함께 삭제됨. [출처](https://docs.docker.com/engine/storage/drivers/)
+- 따라서 이를 방지하려면, 컨테이너 레이어 쪽이 아닌, 다른 곳에 데이터를 저장해야 함.
+1. 호스트 시스템에 저장하기 (`bind mount`)
+![alt text](/assets/bind_mount.png)
+```bat
+// 예시용 파일 생성
+cloudsoswift0540@c6r6s4 ~ % mkdir -p ~/mount-demo && cd ~/mount-demo
+echo "1행: 호스트에서 작성" > log.txt
+// 현재 위치(`/mount-demo`)를 컨테이너의 `/data`와 마운트 한 뒤, `/data/log.txt` 파일의 마지막 10줄을 출력하되(`tail`),
+// 종료하지 않고, 계속 대기하며 문자 출력(`-f`)
+cloudsoswift0540@c6r6s4 mount-demo % docker run -it --rm --name bindtest \
+  -v "$PWD:/data" \
+  alpine tail -f /data/log.txt
+Unable to find image 'alpine:latest' locally
+latest: Pulling from library/alpine
+55afa1ecc21d: Already exists 
+Digest: sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+Status: Downloaded newer image for alpine:latest
+1행: 호스트에서 작성
+2행: 호스트 셸에서 추가
+
+// 다른 터미널
+// 위 터미널에서 계속 출력중인 파일에 한 줄 추가
+cloudsoswift0540@c6r6s4 ~ % echo "2행: 호스트 셸에서 추가" >> ~/mount-demo/log.txt
+cloudsoswift0540@c6r6s4 ~ %
+```
+- `호스트 시스템 경로`와 `컨테이너`를 직접 연결하여, 호스트의 어느 곳에 저장된 파일/디렉터리에든 접근할 수 있게 하는 방법.
+- Docker에 의해 격리되지 않으므로, `호스트상의 Docker가 아닌 프로세스`와 `컨테이너 내 프로세스` 모두 마운트된 파일을 동시에 수정할 수 있음.
+- `Dockerfile`에서 `bind mount`를 하고싶다면, `service명.volumes: - {호스트 주소}:{컨테이너 주소}` 옵션을 주면 됨.
+2. Docker Volume에 저장하기 (`volume mount`)
+```bat
+// 볼륨 생성
+cloudsoswift0540@c6r6s4 ~ % docker volume create demo-vol
+demo-vol
+// 볼륨을 컨테이너와 연결한 뒤, `/data/note.txt` 파일 작성 (해당 작업 수행 후 컨테이너는 삭제(`--rm`))
+cloudsoswift0540@c6r6s4 ~ % docker run --rm -v demo-vol:/data alpine \
+  sh -c 'echo "컨테이너 A가 작성" > /data/note.txt'
+// 다른 컨테이너를 만들어, 볼륨과 또 연결하여 `/data/note.txt` 파일 내용을 출력하도록 시킴
+cloudsoswift0540@c6r6s4 ~ % docker run --rm -v demo-vol:/data alpine cat /data/note.txt
+컨테이너 A가 작성
+// `demo-vol` 볼륨의 호스트 상 저장 위치
+cloudsoswift0540@c6r6s4 ~ % docker volume inspect demo-vol --format '{{.Mountpoint}}'
+/var/lib/docker/volumes/demo-vol/_data
+// 하지만 해당 위치에서 파일을 찾을 수 없음
+cloudsoswift0540@c6r6s4 ~ % ls /var/lib/docker/volumes/demo-vol/_data
+
+ls: /var/lib/docker/volumes/demo-vol/_data: No such file or directory
+```
+- `Docker Daemon`에 의해 관리되는 영구 저장소인 `Volume`에 데이터를 저장하는 방법.
+- `bind mount`와 마찬가지로, 볼륨 데이터는 `호스트의 파일시스템`에 저장되지만, `볼륨 내 데이터`와 `상호작용`하려면 볼륨을 `컨테이너에 마운트`해야 함.
+- `Dockerfile`에서 `volume mount`를 하고싶다면, `service명.volumes: - {볼륨명}:{컨테이너 주소}` 옵션을 주면 됨.
