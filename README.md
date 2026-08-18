@@ -1,7 +1,8 @@
 # workspace
 
 ## 프로젝트 개요 (미션 목표 요약)
-
+- 원활한 협업을 위해, '서비스를 개발하고, 테스트하는 환경'을 Docker로, 환경-독립적인 형태로 공유하는 능력을 기르기 위한 프로젝트
+- 소스코드 파일의 공유를 위해 Git/Github의 기능을 학습하고, 가상환경의 공유를 위해 Docker의 기능을 학습한다.
 ## 실행환경 (OS/쉘/터미널, Docker 버전, Git 버전)
 - OS: macOS Sequoia 15.7.4
 - Shell: zsh(Z shell) 5.9(x86_64-apple-darwin24.0)
@@ -1220,4 +1221,14 @@ server {
 - 링크를 제대로 달아서, 301 리다이렉트 자체를 회피하는 방법
 ## 심층
 ### "호스트 포트가 이미 사용중"이라 포트 매핑 실패시, 어떤 순서로 원인 진단?
+```bat
+cloudsoswift0540@c6r6s4 workspace % lsof -i :3000
+COMMAND     PID             USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+OrbStack  52769 cloudsoswift0540   86u  IPv4 0x1c86543cd2da4cbe      0t0  TCP *:hbci (LISTEN)
+OrbStack  52769 cloudsoswift0540  105u  IPv6 0x75ddfef94a59aa7c      0t0  TCP *:hbci (LISTEN)
+```
+1. 현재 해당 포트를 사용중인 프로세스를 식별한 뒤, 중지한다.
+-  `lsof -i :{포트번호}` 를 입력하면, 해당 포트를 사용중인 프로세스의 정보가 출력된다.
+    - `lsof`: `list open files`의 약자로, 시스템에서 열려있는 모든 파일과 해당 파일들을 열고 있는 프로세스들의 목록을 출력
+- `kill -9 {PID}`: 
 ### 컨테이너 삭제 후 데이터 사라지는 것 방지하기 위한 대안?
