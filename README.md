@@ -18,6 +18,14 @@
 - [x] 바인드 마운트 반영
 - [x] 볼륨 영속성
 - [x] Git 설정 + VSCode GitHub 연동
+- [x] (보너스 과제) GitHub SSH 키 설정
+## 디렉토리 트리 및 각 디렉토리/파일 역할
+- `assets/`: `README.md` 파일에 사용된 이미지들 저장
+- `src/`: `Dockerfile`을 통해 `NGINX` 이미지를 생성할 때, 이미지 레이어에 저장될 html 파일들을 저장한 디렉토리
+- `default.conf.template`: `nginx`의 디폴트 설정을 덮어 씌울 설정 템플릿 파일. 컨테이너 실행(`docker run`)시간에 포트를 할당할 수 있도록 설정함
+- `Dockerfile`: 기존 공식 NGINX 이미지를 기반으로, 커스텀 정적 웹 콘텐츠, 커스텀 포트 설정 등을 제공할 수 있는 커스텀 이미지를 만드는 설계도
+- `nginx.conf`: 설정 파일로 사용할 예정이었으나, 사용되지 않은 파일
+- `README.md`: 각종 과제와 파일에 대한 명세가 담긴 파일
 ## 1. 터미널 조작 로그 기록
 ```bat
 // 현재 위치 확인
@@ -140,7 +148,11 @@ total 8
 -rw-r--r--  1 cloudsoswift0540  cloudsoswift0540  2393 Jul 27 19:19 README.md
 drwxr-xr-x  2 cloudsoswift0540  cloudsoswift0540    64 Jul 27 20:07 empty_folder
 ```
-
+- 주로 쓰이는 숫자 규칙
+    - 755: 주로 `웹서버가 만든 파일`의 권한 규칙. 소유자는 읽기/쓰기/실행 모두 가능하지만, 타인은 읽기/실행만 가능하고 편집/삭제가 불가능
+    - 700: 소유자만 쓸 수 있는 `비공개 파일`
+    - 644: 유닉스/리눅스에서 `파일의 기본 권한`. 소유자는 읽고 쓸 수 있으나, 타인은 읽기만 가능(모두 실행 비트가 없는데, 대부분의 문서, 설정 파일, 일반 데이터 등은 실행 권한이 필요 없음)
+    - 755: 유닉스/리눅스에서 `디렉토리의 기본 권한`(`실행 파일`도 주로 사용). 소유자는 모든 권한이 있으나, 타인은 목록 보기 및 파일 실행만 가능(생성/삭제 불가능)
 ## 3. Docker 설치 및 기본 점검
 ```bat
 // 도커 버전
@@ -159,7 +171,7 @@ Client:
   compose: Docker Compose (Docker Inc.)
     Version:  v5.1.2
     Path:     /Users/cloudsoswift0540/.docker/cli-plugins/docker-compose
-
+# 서버 정보
 Server:
  Containers: 0
   Running: 0
@@ -206,6 +218,7 @@ Server:
   127.0.0.0/8
  Live Restore Enabled: false
  Product License: Community Engine
+ # 주소 풀
  Default Address Pools:
    Base: 192.168.97.0/24, Size: 24
    Base: 192.168.107.0/24, Size: 24
@@ -248,10 +261,8 @@ WARNING: DOCKER_INSECURE_NO_IPTABLES_RAW is set
 
 ```bat
 cloudsoswift0540@c4r1s1 workspace % docker image ls 
-                                                            
 IMAGE   ID             DISK USAGE   CONTENT SIZE   EXTRA
 cloudsoswift0540@c4r1s1 workspace % docker images   
-                                                            
 IMAGE   ID             DISK USAGE   CONTENT SIZE   EXTRA
 cloudsoswift0540@c4r1s1 workspace % docker image pull alpine 
 Using default tag: latest
@@ -262,14 +273,12 @@ f5124fb579e2: Download complete
 Digest: sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 Status: Downloaded newer image for alpine:latest
 docker.io/library/alpine:latest
-cloudsoswift0540@c4r1s1 workspace % docker images                  
-                                                            
+cloudsoswift0540@c4r1s1 workspace % docker images
 IMAGE           ID             DISK USAGE   CONTENT SIZE   EXTRA
 alpine:latest   28bd5fe8b56d         14MB         3.93MB  
 cloudsoswift0540@c4r1s1 workspace % docker image rm alpine
 Untagged: alpine:latest
 Deleted: sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
-
 ```
 
 - `docker image ls`(또는 `docker images`): 모든 `최상위(Top-level) 이미지`와 해당 레포지토리, 태그(버전), 크기를 표시하는 명령어
@@ -701,7 +710,8 @@ PID   USER     TIME  COMMAND
 - [nginx:latest](https://hub.docker.com/_/nginx) (1.31.3)
 - Dockerfile 및 nginx.conf는 자체 작성
 ### 적용한 커스텀 포인트 및 목적
-#### 1. 포트 변경
+- 요약: 포트를 환경변수로 주입받도록하고, 일부 경로에 alias를 사용해 절대 경로 기반으로 정적파일을 처리하게 함. 또한 리다이렉션시 상대 URL을 반환하도록 하여, 컨테이너 내부 주소가 노출되지 않도록 함.
+#### 1. 설정 템플릿 파일 교체(포트 변경)
 ```json
 // `docker image inspect nginx` 내용 중 일부
 {
@@ -726,6 +736,8 @@ server {
 ```
 - 이를 변경하기 위해, nginx의 설정 템플릿 파일인 `default.conf.template`을 수정하여, 컨테이너 실행 시 지정한 포트를 수신하도록 수정
     - 이후 해당 이미지를 컨테이너로 실행할 때, `-e NGINX_PORT={원하는 값}` 옵션을 주면 포트를 수정할 수 있음
+    - `nginx:1.19`부터 새로운 함수를 추가하여, `/etc/nginx/templates/`에 있는 `*.template` 파일을 읽고 `envsubst`한 결과를 `/etc/nginx/conf.d`에 출력함(즉, `*.template`의 내용이 설정파일에 출력되어 `nginx`와 `모듈`들의 작동 방식을 결정하게 됨.)
+        - `envsubst`: `$VARIABLE`(또는 `${VARIABLE}`) 형식의 문자열을 실제 시스템의 환경 변수값으로 치환해주는 유닉스 명령어 [참고](https://www.baeldung.com/linux/envsubst-command)
 #### 2. 경로에 alias 사용
 ```json
     location /second {
@@ -749,6 +761,9 @@ server {
 #### 이미지 빌드/실행 명령
 - 빌드: `docker build -t my-nginx .`  
 - 실행: `docker run -d -e NGINX_PORT=8080 -p 3000:8080 my-nginx`
+    - 3000번 포트: React, Node.js 등 프론트엔드 개발 환경에서 로컬 서버를 띄울때 흔히 사용하는 포트
+    - 8080번 포트: 표준 HTTP 통신 포트인 80번 대신, 개벨/테스트 환경에서 Tomcat, Spring 등 웹 서버 프레임워크를 띄울때 흔히 사용하는 포트
+        - 0~1023번 포트는 모두 예약 되어있기 떄문에, 바인딩하려면 루트 권한이 필요함 -> 따라서 루트 권한을 필요로 하지 않는 다른 포트들을 개발용으로 사용하기 시작해 위 두 포트들이 흔히 사용됨.
 #### 핵심 결과
 ##### 로그
 ```bat
@@ -822,6 +837,14 @@ cloudsoswift0540@c6r7s4 workspace % docker logs nostalgic_roentgen
 ```
 ##### 스크린샷
 ![alt text](assets/docker_result.png)
+## Dockerfile의 주요 목적과 복사 대상 파일
+### 주요 목적
+- Dockerfile의 목적은 도커 컨테이너를 생성하기 위한 이미지의 제작 과정을 자동화하고, 기록하는 설계도를 제공하는 것
+- 이 저장소의 `Dockerfile`의 경우, 정적 웹 콘텐츠(`src/*`)와 NGINX 설정을 공식 NGINX 이미지(`nginx:alpine`)에 얹어, 포트 번호를 실행시점에 바꿀 수 있는 커스텀 이미지를 만드는 것임
+    - 기본 NGINX 이미지의 경우, 서빙하는 정적 웹 콘텐츠도 없고, 커스텀 라우팅도 동작하지 않음
+### 복사 대상 파일
+- `src/*`(`COPY src/ /usr/share/nginx/html/`): NGINX 공식 이미지의 기본 웹 루트인 `/usr/share/nginx/html`로 정적 웹 콘텐츠들을 복사함
+- `default.conf.template`(`COPY default.conf.template /etc/nginx/templates/`): NGINX 컨테이너가 실행될 때, 읽어들이고 환경변수 주입 과정을 거쳐 `/etc/nginx/conf.d/default.conf` 으로 바뀜(즉, 기본 설정을 덮어씀)
 ## 7. 포트 매핑 및 접속 증거
 ```bat
 # 실행
@@ -869,6 +892,10 @@ cloudsoswift0540@c6r7s4 workspace % curl http://localhost:3001
 </body>
 </html>% 
 ```
+- `네트워크 네임스페이스`: *네트워킹과 관련된 `시스템 리소스`* 를 격리할 수 있게 해주는 기술
+    - 시스템 리소스로는 `네트워크 장치`, `IP 라우팅 테이블`, `방화벽 규칙`, `포트 번호` 등이 있음
+    - 이러한 기술은 주로 `가상화 환경`(컨테이너, VM 등)에서 네트워크 리소스를 격리하는데에 사용됨
+        - 이를 통해 컨테이너 간은 물론, 호스트와의 네트워크 충돌 없이 독립된 네트워크 인터페이스, IP, 라우팅 테이블 등을 가질 수 있음
 ## 8. Docker 볼륨 영속성 검증
 ### 볼륨 생성/연결/검증 절차(명령 + 출력)
 ```bat
@@ -914,6 +941,31 @@ DRIVER    VOLUME NAME
   - 마운트시, Docker는 컨테이너 내부 마운트 지점에 대해 상대경로 지원하지 않음
   - 여러 컨테이너에서 동일한 볼륨을 사용할 수 있음
 - `docker volume ls`
+### 볼륨 백업/복원 방안
+```bat
+# 1. 백업/압축하기
+# 예시 컨테이너
+# `/dbdata` 볼륨과 연결된 컨테이너
+docker run -v /dbdata --name dbstore ubuntu /bin/bash
+# 백업 커맨드
+# 위에서 만든 `dbstore` 컨테이너의 볼륨에 마운트한 새 컨테이너를 만듦
+# 로컬 호스트의 디렉토리를 컨테이너의 `/backup` 위치에 마운트 함
+# `/dbdata` 디렉토리 안의 파일들을 `/backup` 폴더 안의 `backup.tar`로 압축함
+# 이렇게 하면 `$(pwd)`에 `backup.tar`라는, `/dbdata` 볼륨의 데이터를 백업한 압축 파일이 만들어 짐
+docker run --rm --volumes-from dbstore -v $(pwd):/backup ubuntu tar cvf /backup/backup.tar /dbdata
+
+# 2. 복원/압축풀기
+# 위에서 만들었던 백업 파일을 다른 컨테이너에 복원해보겠음
+# 먼저 `dbstore2`라는, `/dbdata` 볼륨을 기반으로 하는 컨테이너를 만듦
+docker run -v /dbdata --name dbstore2 ubuntu /bin/bash
+# 이후, `dbstore2`의 볼륨을 기반으로 하는 새 컨테이너를 만듦
+# 또한, 로컬 호스트의 디렉토리를 컨테이너의 `/backup` 위치에 마운트 함
+# 이후 `/dbdata` 볼륨으로 이동한 뒤, `/backup/backup.tar` 압축 파일을 풂
+# 이렇게 하면 `/dbdata` 볼륨에 데이터를 복원할 수 있음
+docker run --rm --volumes-from dbstore2 -v $(pwd):/backup ubuntu bash -c "cd /dbdata && tar xvf /backup/backup.tar --strip 1"
+```
+- [공식 문서](https://docs.docker.com/engine/storage/volumes/#back-up-a-volume)에서도, 그리고 대다수의 유저들도 볼륨을 `tar 파일`로 `압축`하여 백업하는 방법을 주로 사용함.
+
 ## 9. Git 설정 및 Github 연동
 ### `git config --list` 결과
 ```yml
