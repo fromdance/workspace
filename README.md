@@ -702,11 +702,207 @@ PID   USER     TIME  COMMAND
 ```
 - `nginx` 이미지의 공개 포트는 `80/tcp`임
 - [EXPOSE 값은 영향이 없음](https://docs.docker.com/reference/dockerfile/#expose)
-#### 2. 
+```json
+// default.conf.template
+server {
+    listen ${NGINX_PORT};
+    server_name localhost;
+    absolute_redirect off; 
+
+    ...
+}
+```
+- 이를 변경하기 위해, nginx의 설정 템플릿 파일인 `default.conf.template`을 수정하여, 컨테이너 실행 시 지정한 포트를 수신하도록 수정
+    - 이후 해당 이미지를 컨테이너로 실행할 때, `-e NGINX_PORT={원하는 값}` 옵션을 주면 포트를 수정할 수 있음
+#### 2. 경로에 alias 사용
+```json
+    location /second {
+        alias /usr/share/nginx/html/second;
+        index index.html;
+    }
+```
+- `location`에 대응되는 디렉토리를 지정하기 위해 보통 `root`를 사용하지만, `alias`를 사용
+- `location` 뒤에 경로를 추가하던 `root`와 달리, `alias`는 URL을 대체하게 됨
+#### 3. 리다이렉션시 상대 URL 사용
+```json
+server {
+    ...
+    absolute_redirect off; 
+    ...
+}
+```
+- `NGINX`에서는 기본적으로 `누락된 슬래시 추가` 등의 이유로, 리다이렉션 하는 경우 `Location` 헤더에 *`스키마`와 `포트`가 포함된* `URL`을 반환함
+- 이때, `absolute_redirect` 옵션을 끌 경우, `상대 URL`을 반환하도록 강제함
 ### 빌드/실행 명령 + 핵심 결과
-#### 이미지 빌드
-`docker build -t my-nginx .`  
-`docker run -d -e NGINX_PORT=8080 -p 3000:8080 my-nginx`
+#### 이미지 빌드/실행 명령
+- 빌드: `docker build -t my-nginx .`  
+- 실행: `docker run -d -e NGINX_PORT=8080 -p 3000:8080 my-nginx`
+#### 핵심 결과
+##### 로그
+```bat
+# 빌드
+cloudsoswift0540@c6r7s4 workspace % docker build -t my-nginx .
+[+] Building 6.9s (8/8) FINISHED                                docker:orbstack
+ => [internal] load build definition from Dockerfile                       0.2s
+ => => transferring dockerfile: 526B                                       0.0s
+ => [internal] load metadata for docker.io/library/nginx:alpine            2.4s
+ => [internal] load .dockerignore                                          0.1s
+ => => transferring context: 2B                                            0.0s
+ => [1/3] FROM docker.io/library/nginx:alpine@sha256:4a73073bd557c65b7595  3.0s
+ => => resolve docker.io/library/nginx:alpine@sha256:4a73073bd557c65b7595  0.2s
+ => => sha256:1d40e3eb3bf4f138de1d67193f2aa5309fcaf343eb5 2.50kB / 2.50kB  0.0s
+ => => sha256:f0ba77f796e57c6fa89ae7f4fdad1665d6fcbd8e3 12.32kB / 12.32kB  0.0s
+ => => sha256:4a73073bd557c65b759505da037898b61f1be6cbc 10.33kB / 10.33kB  0.0s
+ => => sha256:55afa1ecc21d2bb5e5045f32dafee56272ffd89860b 3.85MB / 3.85MB  0.5s
+ => => sha256:3cd534fe98c64d68a1f4f1c83abb8d5cba7ecfd7be8 1.89MB / 1.89MB  0.3s
+ => => sha256:1223f016b4e4a2c21f7c49d4837fbfd47a9da6436b51169 627B / 627B  0.7s
+ => => sha256:62bec68d7c31c4c8a19d812d84da5f7748e54690c037979 957B / 957B  0.8s
+ => => extracting sha256:55afa1ecc21d2bb5e5045f32dafee56272ffd89860bac26f  0.1s
+ => => sha256:46f977ee452f4399c208714afa034868d6056864f8a0cf3 404B / 404B  0.8s
+ => => extracting sha256:3cd534fe98c64d68a1f4f1c83abb8d5cba7ecfd7be88e592  0.1s
+ => => sha256:390dc935348d8070e695fbaae2a4bb114fb9e69c59f 1.40kB / 1.40kB  1.0s
+ => => sha256:d0008c891db48b5f526d914bce9e8d889fe1a9d1f08 1.21kB / 1.21kB  1.0s
+ => => sha256:46519e7231d2eb5604df229beb44d59719a489eaa 20.31MB / 20.31MB  1.4s
+ => => extracting sha256:1223f016b4e4a2c21f7c49d4837fbfd47a9da6436b511690  0.0s
+ => => extracting sha256:62bec68d7c31c4c8a19d812d84da5f7748e54690c0379799  0.0s
+ => => extracting sha256:46f977ee452f4399c208714afa034868d6056864f8a0cf3c  0.0s
+ => => extracting sha256:d0008c891db48b5f526d914bce9e8d889fe1a9d1f08291ae  0.0s
+ => => extracting sha256:390dc935348d8070e695fbaae2a4bb114fb9e69c59f628e7  0.0s
+ => => extracting sha256:46519e7231d2eb5604df229beb44d59719a489eaa7aca529  0.4s
+ => [internal] load build context                                          0.3s
+ => => transferring context: 1.36kB                                        0.0s
+ => [2/3] COPY src/ /usr/share/nginx/html/                                 0.2s
+ => [3/3] COPY default.conf.template /etc/nginx/templates/                 0.2s
+ => exporting to image                                                     0.2s
+ => => exporting layers                                                    0.2s
+ => => writing image sha256:86dd47d71c4ebb1aeb3190099c5ce68d07f85a0d294d5  0.0s
+ => => naming to docker.io/library/my-nginx                                0.0s
+# 실행
+cloudsoswift0540@c6r7s4 workspace % docker run -d -e NGINX_PORT=8080 -p 3000:8080 my-nginx
+4a4c1f6ec353d79485457dac4fb3c66e453eaebf0b9bf621997dbd0ae2f1130d
+# 로그
+cloudsoswift0540@c6r7s4 workspace % docker logs nostalgic_roentgen
+/docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+/docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+10-listen-on-ipv6-by-default.sh: info: Getting the checksum of /etc/nginx/conf.d/default.conf
+10-listen-on-ipv6-by-default.sh: info: Enabled listen on IPv6 in /etc/nginx/conf.d/default.conf
+/docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+20-envsubst-on-templates.sh: Running envsubst on /etc/nginx/templates/default.conf.template to /etc/nginx/conf.d/default.conf
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+/docker-entrypoint.sh: Configuration complete; ready for start up
+2026/08/18 09:16:38 [notice] 1#1: using the "epoll" event method
+2026/08/18 09:16:38 [notice] 1#1: nginx/1.31.3
+2026/08/18 09:16:38 [notice] 1#1: built by gcc 15.2.0 (Alpine 15.2.0) 
+2026/08/18 09:16:38 [notice] 1#1: OS: Linux 6.17.8-orbstack-00308-g8f9c941121b1
+2026/08/18 09:16:38 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 20480:1048576
+2026/08/18 09:16:38 [notice] 1#1: start worker processes
+2026/08/18 09:16:38 [notice] 1#1: start worker process 36
+2026/08/18 09:16:38 [notice] 1#1: start worker process 37
+2026/08/18 09:16:38 [notice] 1#1: start worker process 38
+2026/08/18 09:16:38 [notice] 1#1: start worker process 39
+2026/08/18 09:16:38 [notice] 1#1: start worker process 40
+2026/08/18 09:16:38 [notice] 1#1: start worker process 41
+192.168.215.1 - - [18/Aug/2026:09:16:45 +0000] "GET / HTTP/1.1" 200 310 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "-"
+2026/08/18 09:16:45 [error] 38#38: *1 open() "/usr/share/nginx/html/favicon.ico" failed (2: No such file or directory), client: 192.168.215.1, server: localhost, request: "GET /favicon.ico HTTP/1.1", host: "localhost:3000", referrer: "http://localhost:3000/"
+192.168.215.1 - - [18/Aug/2026:09:16:45 +0000] "GET /favicon.ico HTTP/1.1" 404 555 "http://localhost:3000/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "-"
+```
+##### 스크린샷
+![alt text](assets/docker_result.png)
+## 7. 포트 매핑 및 접속 증거
+```bat
+# 실행
+cloudsoswift0540@c6r7s4 workspace % docker run -d -e NGINX_PORT=8080 -p 3000:8080 my-nginx
+4a4c1f6ec353d79485457dac4fb3c66e453eaebf0b9bf621997dbd0ae2f1130d
+# curl 요청
+cloudsoswift0540@c6r7s4 workspace % curl -i localhost:3000
+HTTP/1.1 200 OK
+Server: nginx/1.31.3
+Date: Tue, 18 Aug 2026 09:21:50 GMT
+Content-Type: text/html
+Content-Length: 310
+Last-Modified: Tue, 18 Aug 2026 08:50:52 GMT
+Connection: keep-alive
+ETag: "6a841cec-136"
+Accept-Ranges: bytes
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>나만의 웹 사이트</title>
+</head>
+<body>
+  <h1>나만의 NGINX 이미지 입니다. 메인 페이지 (/)</h1>
+  <p>NGINX 커스텀 이미지 제작 성공!</p>
+  <a href="/second">두 번째 페이지로 이동</a>
+</body>
+</html>%  
+```
+## 8. Docker 볼륨 영속성 검증
+### 볼륨 생성/연결/검증 절차(명령 + 출력)
+```bat
+# 볼륨 생성
+cloudsoswift0540@c6r7s4 workspace % docker volume create test-vol
+test-vol
+# 생성한 볼륨 조회
+cloudsoswift0540@c6r7s4 workspace % docker volume list
+DRIVER    VOLUME NAME
+local     test-vol
+# alpine 이미지를 기반으로 한 컨테이너를 생성하되, 해당 컨테이너의 `/data` 를 `test-vol` 볼륨과 연결(`-v`)하고,
+// `--rm` 옵션을 주어 컨테이너 종료시 해당 컨테이너와 관련된 익명 볼륨을 자동 제거함.
+// 그리고 쉘(sh)에 텍스트로 전달한(`-c`) 파일 생성 명령(`echo ...`)을 수행하도록 함.
+cloudsoswift0540@c6r7s4 workspace % docker run --rm -v test-vol:/data alpine \
+  sh -c "echo 'Hello Volume!' > /data/test.txt"
+// 이후, alpine 이미지 기반으로 새로운 컨테이너를 생성하여 테스트 볼륨과 연결한 뒤, `/data/test.txt` 텍스트 파일 내용을 출력하도록 함.
+// 만약 컨테이너의 익명 볼륨에 저장됐다면, 새 컨테이너에서는 출력되지 않아야 하지만,
+// 이전 컨테이너에서 테스트 볼륨에 파일을 저장했기 때문에, 테스트 볼륨과 연결한 새 컨테이너에서도 해당 파일을 읽을 수 있음
+cloudsoswift0540@c6r7s4 workspace % docker run --rm -v test-vol:/data alpine \ 
+  cat /data/test.txt
+Hello Volume!
+# 볼륨 분석
+cloudsoswift0540@c6r7s4 workspace % docker volume inspect test-vol
+[
+    {
+        "CreatedAt": "2026-08-18T18:36:58+09:00",
+        "Driver": "local",
+        "Labels": null,
+        "Mountpoint": "/var/lib/docker/volumes/test-vol/_data", // 실제 데이터를 저장하는 위치
+        "Name": "test-vol",
+        "Options": null,
+        "Scope": "local"
+    }
+]
+# 볼륨 삭제
+cloudsoswift0540@c6r7s4 workspace % docker volume rm test-vol
+test-vol
+# 볼륨 삭제되었는지 확인
+cloudsoswift0540@c6r7s4 workspace % docker volume ls         
+DRIVER    VOLUME NAME
+```
+- `docker volume create`: 볼륨을 생성할 수 있는 명령어
+  - 마운트시, Docker는 컨테이너 내부 마운트 지점에 대해 상대경로 지원하지 않음
+  - 여러 컨테이너에서 동일한 볼륨을 사용할 수 있음
+- `docker volume ls`
+## 9. Git 설정 및 Github 연동
+```yml
+cloudsoswift0540@c6r7s4 workspace % git config --list     
+credential.helper=osxkeychain
+user.name=fromdance
+user.email=cloudsoswift@naver.com
+core.repositoryformatversion=0
+core.filemode=true
+core.bare=false
+core.logallrefupdates=true
+core.ignorecase=true
+core.precomposeunicode=true
+remote.origin.url=https://github.com/fromdance/workspace
+remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
+branch.main.remote=origin
+branch.main.merge=refs/heads/main
+branch.main.vscode-merge-base=origin/main
+```
 ## 트러블슈팅 2건 이상(문제 → 원인 가설 → 확인 → 해결/대안)
 ### 1. Docker 컨테이너 실행 구조에 대한 오해
 #### 문제
