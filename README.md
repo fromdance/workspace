@@ -3,9 +3,20 @@
 ## 프로젝트 개요 (미션 목표 요약)
 
 ## 실행환경 (OS/쉘/터미널, Docker 버전, Git 버전)
-
+- OS: macOS Sequoia 15.7.4
+- Shell: zsh(Z shell) 5.9(x86_64-apple-darwin24.0)
+- Docker: 28.5.2
+- Git: 2.53.0
 ## 수행 항목 체크리스트(터미널/권한/Docker/Dockerfile/포트/볼륨/Git/GitHub)
-
+- [x] 터미널 기본 조작 및 폴더 구성
+- [x] 권한 변경 실습
+- [x] Docker 설치/점검
+- [x] hello-world 실행
+- [x] Dockerfile 빌드/실행
+- [x] 포트 매핑 접속(2회)
+- [x] 바인드 마운트 반영
+- [x] 볼륨 영속성
+- [x] Git 설정 + VSCode GitHub 연동
 ## 1. 터미널 조작 로그 기록
 ```bat
 // 현재 위치 확인
@@ -838,7 +849,24 @@ Accept-Ranges: bytes
   <p>NGINX 커스텀 이미지 제작 성공!</p>
   <a href="/second">두 번째 페이지로 이동</a>
 </body>
-</html>%  
+</html>% 
+# 다른 포트 실행
+cloudsoswift0540@c6r7s4 workspace % docker run -d -e NGINX_PORT=8081 -p 3001:8081 --name my_web_8081 my-nginx
+4383c9703aac7df969ec2a2b39b2192df1d98870aa5f8416d78517c7a02b3b41
+# curl 요청
+cloudsoswift0540@c6r7s4 workspace % curl http://localhost:3001                                              
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>나만의 웹 사이트</title>
+</head>
+<body>
+  <h1>나만의 NGINX 이미지 입니다. 메인 페이지 (/)</h1>
+  <p>NGINX 커스텀 이미지 제작 성공!</p>
+  <a href="/second">두 번째 페이지로 이동</a>
+</body>
+</html>% 
 ```
 ## 8. Docker 볼륨 영속성 검증
 ### 볼륨 생성/연결/검증 절차(명령 + 출력)
@@ -886,6 +914,7 @@ DRIVER    VOLUME NAME
   - 여러 컨테이너에서 동일한 볼륨을 사용할 수 있음
 - `docker volume ls`
 ## 9. Git 설정 및 Github 연동
+### `git config --list` 결과
 ```yml
 cloudsoswift0540@c6r7s4 workspace % git config --list     
 credential.helper=osxkeychain
@@ -903,6 +932,32 @@ branch.main.remote=origin
 branch.main.merge=refs/heads/main
 branch.main.vscode-merge-base=origin/main
 ```
+### Github 로그인 및 저장소 연동 증거
+```bat
+# 1. Github 통신용 ssh 키 생성
+cloudsoswift0540@c6r7s4 workspace % ssh-keygen -t ed25519 -C "cloudsoswift@naver.com"
+# 2. 공개 키 내용을 클립보드에 복사
+cloudsoswift0540@c6r7s4 .ssh % cat id_ed25519.pub 
+# 공개 키 내용 ---------------------------------------------
+# 해당 내용을 https://github.com/settings/keys 에서 SSH 키로 등록
+# 3. 기존에 `HTTPS`로 받아온 remote로는 `SSH` 통신을 할 수 없으므로, `SSH` URL로 remote를 변경한다.
+# 먼저, 기존 remote의 이름을 다른 것으로 변경
+cloudsoswift0540@c6r7s4 workspace % git remote rename origin origin_old
+# SSH URL로 새 리모트 추가
+cloudsoswift0540@c6r7s4 workspace % git remote add origin git@github.com:fromdance/workspace.git
+cloudsoswift0540@c6r7s4 workspace % git push -u origin main            
+오브젝트 나열하는 중: 8, 완료.
+오브젝트 개수 세는 중: 100% (8/8), 완료.
+Delta compression using up to 6 threads
+오브젝트 압축하는 중: 100% (5/5), 완료.
+오브젝트 쓰는 중: 100% (5/5), 150.40 KiB | 900.00 KiB/s, 완료.
+Total 5 (delta 2), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
+To github.com:fromdance/workspace.git
+   094a885..ff592fc  main -> main
+branch 'main' set up to track 'origin/main'.
+```
+![alt text](assets/registered_ssh_key.png)
 ## 트러블슈팅 2건 이상(문제 → 원인 가설 → 확인 → 해결/대안)
 ### 1. Docker 컨테이너 실행 구조에 대한 오해
 #### 문제
@@ -1163,3 +1218,6 @@ server {
 <a href="/second/">두 번째 페이지로 이동</a>
 ```
 - 링크를 제대로 달아서, 301 리다이렉트 자체를 회피하는 방법
+## 심층
+### "호스트 포트가 이미 사용중"이라 포트 매핑 실패시, 어떤 순서로 원인 진단?
+### 컨테이너 삭제 후 데이터 사라지는 것 방지하기 위한 대안?
